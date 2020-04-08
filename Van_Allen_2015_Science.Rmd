@@ -1,0 +1,59 @@
+---
+title: "Van Allen et al. 2015. Science"
+output: html_document
+---
+
+# Citation
+```{r eval=F}
+Author: Van Allen et al. 2015 Oct 9;350(6257):207-211
+Title: Genomic correlates of response to CTLA-4 blockade in metastatic melanoma.
+doi: 10.1126/science.aad0095.
+```
+
+# Load libraries
+```{r}
+library(useful)
+library(tidyverse)
+library(readxl)
+library(org.Hs.eg.db)
+```
+
+# Load data
+## Gene expression data
+```{r}
+# Download FPKM values from GEO
+file = "raw/Van_Allen_2015_Science/TPM_RSEM_VAScience2015.txt"
+expr = read.table(file, sep="\t", header=T, row.names=1)
+
+# Convert Entreaz Gene ID to Gene symbol
+dictionary = unlist(as.list(org.Hs.egENSEMBL2EG))
+entrez = dictionary[as.character(str_extract(rownames(expr), "^ENSG[0-9]+"))]
+dictionary = unlist(as.list(org.Hs.egSYMBOL))
+symbols = dictionary[entrez]
+max(table(symbols)) # many genes are duplicated
+
+# Sum as expression level of the duplicated ids
+expr = apply(expr, 2, tapply, symbols, sum)
+corner(expr)
+
+# convert column names
+colnames(expr) = str_extract(colnames(expr), "Pat[0-9]+$")
+```
+
+## Patient info
+```{r}
+ifile = "./raw/Van_Allen_2015_Science/TableS2_Revised.xlsx"
+meta = read_xlsx(path=ifile, sheet=2)
+colnames(meta)
+meta = meta %>% column_to_rownames("patient")
+```
+
+# Save
+```{r}
+patients = intersect(rownames(meta), colnames(expr))
+colnames(expr)[!(colnames(expr) %in% patients)]
+rownames(meta)[!(rownames(meta) %in% patients)]
+saveRDS(list(expr_pre=expr, meta=meta), file="rds/Van_Allen_2015_Science.rds")
+```
+
+
