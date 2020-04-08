@@ -1,0 +1,79 @@
+---
+title: "Hugo et al. 2016. Cell"
+output: html_document
+---
+
+# Citation
+```{r eval=F}
+Author: Hugo et al. Cell. 2016 Mar 24;165(1):35-44. 
+Title: Genomic and Transcriptomic Features of Responseto Anti-PD-1 Therapy in Metastatic Melanoma
+doi: 10.1016/j.cell.2016.02.065.
+```
+
+# Load libraries
+```{r}
+library(useful)
+library(tidyverse)
+library(readxl)
+```
+
+# Load data
+## Gene expression data
+```{r}
+# Download FPKM values from GEO
+file = "raw/Hugo_2016_Cell/GSE78220_PatientFPKM.xlsx"
+expr = read_xlsx(file)
+expr = expr %>% column_to_rownames("Gene")
+
+colnames(expr)
+expr = expr[,grep("baseline", colnames(expr))] # select only samples before treatment
+colnames(expr) = gsub(".baseline$", "", colnames(expr))
+corner(expr)
+```
+
+## Patient info
+```{r}
+ifile = "./raw/Hugo_2016_Cell/mmc1.xls"
+tabS1A = read_xls(path=ifile, sheet="S1A", range="A3:O42")
+colnames(tabS1A) = gsub(" ", "_", colnames(tabS1A))
+
+# Patient 27 is duplicated
+idx = which(tabS1A$Patient_ID == "Pt27")
+tabS1A$Patient_ID[c(idx, idx+1)] = c("Pt27A", "Pt27B")
+tabS1A[idx+1, 2:9] = tabS1A[idx, 2:9]
+
+# Convert irRECIST
+conv = c("Complete Response"="CR", "Partial Response"="PR", "Progressive Disease"="PD")
+tabS1A$irRECIST = conv[tabS1A$irRECIST]
+```
+
+```{r}
+tabS1B = read_xls(path=ifile, sheet="S1B", range="A3:J41")
+colnames(tabS1B) = gsub(" ", "_", colnames(tabS1B))
+colnames(tabS1B) = gsub("[?]", "", colnames(tabS1B))
+
+# Patient 27 is duplicated
+idx = which(tabS1B$Patient_ID == "Pt27")
+tabS1B = rbind(tabS1B, tabS1B[idx,])
+tabS1B$Patient_ID[c(idx, nrow(tabS1B))] = c("Pt27A", "Pt27B")
+
+# Select necessary rows
+tabS1B = tabS1B %>% select(Patient_ID, BRCA2mutant, IPRES_signature, Response, TotalNonSyn)
+tabS1B$IPRES_signature[tabS1B$IPRES_signature == "na"] = NA
+```
+
+```{r}
+meta = left_join(tabS1A, tabS1B, by="Patient_ID") %>% column_to_rownames("Patient_ID") %>% as.data.frame()
+```
+
+# Save
+```{r}
+patients = intersect(colnames(expr), rownames(meta))
+colnames(expr)[!(colnames(expr) %in% patients)]
+rownames(meta)[!(rownames(meta) %in% patients)]
+expr = expr[,patients]
+meta = meta[patients,]
+saveRDS(list(expr_pre=expr, meta=meta), file="rds/Hugo_2016_Cell.rds")
+```
+
+
