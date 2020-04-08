@@ -1,0 +1,71 @@
+---
+title: "Riaz et al. 2017. Cell"
+output: html_document
+---
+
+# Citation
+```{r eval=F}
+Author: Riaz et al. Cell. 2017 Nov 2;171(4):934-949.e16. 
+Title: Tumor and Microenvironment Evolution during Immunotherapy with Nivolumab
+doi: 10.1016/j.cell.2017.09.028.
+```
+
+# Load libraries
+```{r}
+library(useful)
+library(tidyverse)
+library(readxl)
+library(org.Hs.eg.db)
+```
+
+# Load data
+## Gene expression data
+```{r}
+# Download FPKM values from GEO
+file = "raw/Riaz_2017_Cell/GSE91061_BMS038109Sample.hg19KnownGene.fpkm.csv"
+expr = read.csv(file, row.names=1)
+
+# Convert Entreaz Gene ID to Gene symbol
+dictionary = unlist(as.list(org.Hs.egSYMBOL))
+symbols = dictionary[as.character(rownames(expr))]
+max(table(symbols)) # no duplicated genes
+
+# 
+expr = cbind(expr, symbols) %>% filter(!is.na(symbols)) %>% column_to_rownames("symbols")
+expr = expr[sort(rownames(expr)),]
+corner(expr)
+
+expr_pre = expr[,grep("Pre", colnames(expr))] # select samples before treatment
+expr_post = expr[,grep("On", colnames(expr))] # select samples before treatment
+
+# convert column names
+colnames(expr_pre) = str_extract(colnames(expr_pre), "^Pt[0-9]+")
+colnames(expr_post) = str_extract(colnames(expr_post), "^Pt[0-9]+")
+```
+
+## Patient info
+```{r}
+ifile = "./raw/Riaz_2017_Cell/mmc2.xlsx"
+meta = read_xlsx(path=ifile, range="A3:L76", na="NA")
+colnames(meta)
+
+# convert column names
+colnames(meta) = gsub("[ -/]", "_", colnames(meta))
+colnames(meta) = str_extract(colnames(meta), "^[a-zA-Z_]+")
+
+meta = meta %>% column_to_rownames("Patient")
+```
+
+# Save
+```{r}
+patients = intersect(rownames(meta), c(colnames(expr_pre), colnames(expr_post)))
+colnames(expr_pre)[!(colnames(expr_pre) %in% patients)]
+colnames(expr_post)[!(colnames(expr_post) %in% patients)]
+rownames(meta)[!(rownames(meta) %in% patients)]
+expr_pre = expr_pre[,intersect(patients, colnames(expr_pre))]
+expr_post = expr_post[,intersect(patients, colnames(expr_post))]
+meta = meta[patients,]
+saveRDS(list(expr_pre=expr_pre, expr_post=expr_post, meta=meta), file="rds/Riaz_2017_Cell.rds")
+```
+
+
